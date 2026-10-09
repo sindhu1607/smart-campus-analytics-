@@ -2,7 +2,7 @@ services:
   - type: web
     name: smart-campus-analytics
     runtime: python
-    plan: starter
+    plan: free
     buildCommand: pip install -r requirements.txt && python manage.py collectstatic --noinput
     startCommand: python manage.py migrate --noinput && gunicorn config.wsgi:application --bind 0.0.0.0:$PORT --workers 2 --timeout 60
     healthCheckPath: /
@@ -31,6 +31,6 @@ services:
         value: "True"
 databases:
   - name: smart-campus-analytics-db
-    plan: basic-256mb
+    plan: free
     databaseName: smart_campus_analytics
     user: smart_campus_analytics
