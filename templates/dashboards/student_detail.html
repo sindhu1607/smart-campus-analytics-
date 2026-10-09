@@ -1,0 +1,407 @@
+{% extends 'base.html' %}
+
+{% block title %}{{ student.full_name }} - Student Intelligence Profile{% endblock %}
+
+{% block content %}
+<!-- Student Header Card -->
+<div class="card card-stats p-4 mb-4">
+    <div class="d-flex flex_wrap align-items-center justify-content-between gap-3">
+        <div class="d-flex align-items-center gap-3">
+            <div class="stat-icon bg-primary text-white" style="width: 64px; height: 64px; font-size: 2rem;">
+                <i class="bi bi-person"></i>
+            </div>
+            <div>
+                <div class="d-flex align-items-center gap-2">
+                    <h3 class="fw-bold mb-0">{{ student.full_name }}</h3>
+                    <span class="badge bg-light text-dark border font-monospace">{{ student.student_id }}</span>
+                </div>
+                <div class="text-muted small mt-1">
+                    <i class="bi bi-building"></i> {{ student.department.name }} ({{ student.department.code }}) | 
+                    <i class="bi bi-mortarboard"></i> {{ student.program.name }} | Semester {{ student.current_semester }}
+                </div>
+            </div>
+        </div>
+
+        <div class="d-flex align-items-center gap-4 text-center">
+            <div>
+                <div class="text-muted small">Success Score</div>
+                {% if explanation.score_status == 'CALCULATED' or explanation.score_status == 'PROVISIONAL' %}
+                    <div class="display-6 fw-bold text-primary">{{ snapshot.overall_success_score|floatformat:1 }} <span class="fs-6 text-muted">/100</span></div>
+                    {% if explanation.score_status == 'PROVISIONAL' %}<span class="badge bg-warning text-dark">Provisional · {{ explanation.data_coverage_percentage }}% data coverage</span>{% endif %}
+                {% else %}
+                    <div class="display-6 fw-bold text-muted">N/A</div><span class="badge bg-secondary">Insufficient data</span>
+                {% endif %}
+            </div>
+            <div>
+                <div class="text-muted small">Academic Risk</div>
+                {% if snapshot.academic_risk_level == 'LOW' %}
+                    <span class="badge bg-success fs-6">Low Risk</span>
+                {% elif snapshot.academic_risk_level == 'MEDIUM' %}
+                    <span class="badge bg-warning text-dark fs-6">Medium Risk</span>
+                {% elif snapshot.academic_risk_level == 'HIGH' %}
+                    <span class="badge bg-danger fs-6">High Risk</span>
+                {% elif snapshot.academic_risk_level == 'CRITICAL' %}
+                    <span class="badge bg-dark fs-6">Critical Risk</span>
+                {% else %}
+                    <span class="badge bg-secondary fs-6">Insufficient Data</span>
+                {% endif %}
+            </div>
+            {% if not user.is_student_user %}
+                <button type="button" class="btn btn-primary rounded-pill btn-sm" data-bs-toggle="modal" data-bs-target="#newInterventionModal">
+                    <i class="bi bi-plus-circle me-1"></i> Log Intervention
+                </button>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Tab Navigation -->
+<ul class="nav nav-tabs mb-4" id="studentTab" role="tablist">
+    <li class="nav-item" role="presentation">
+        <button class="nav-link active fw-semibold" id="overview-tab" data-bs-toggle="tab" data-bs-target="#overview-pane" type="button" role="tab"><i class="bi bi-pie-chart me-1"></i> Score & Explainability</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="academics-tab" data-bs-toggle="tab" data-bs-target="#academics-pane" type="button" role="tab"><i class="bi bi-book me-1"></i> Academics</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="attendance-tab" data-bs-toggle="tab" data-bs-target="#attendance-pane" type="button" role="tab"><i class="bi bi-calendar-check me-1"></i> Attendance</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="lms-tab" data-bs-toggle="tab" data-bs-target="#lms-pane" type="button" role="tab"><i class="bi bi-laptop me-1"></i> LMS & Skills</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="placement-tab" data-bs-toggle="tab" data-bs-target="#placement-pane" type="button" role="tab"><i class="bi bi-briefcase me-1"></i> Placement Readiness</button>
+    </li>
+    <li class="nav-item" role="presentation">
+        <button class="nav-link fw-semibold" id="interventions-tab" data-bs-toggle="tab" data-bs-target="#interventions-pane" type="button" role="tab"><i class="bi bi-heart-pulse me-1"></i> Interventions ({{ interventions.count }})</button>
+    </li>
+</ul>
+
+<div class="tab-content" id="studentTabContent">
+    <!-- 1. Explainability Breakdown Pane -->
+    <div class="tab-pane fade show active" id="overview-pane" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-md-7">
+                <div class="card card-stats p-4">
+                    <h5 class="fw-bold mb-3"><i class="bi bi-calculator text-primary me-2"></i> Explainable Score Contribution Matrix</h5>
+                    <div class="table-responsive">
+                        <div class="alert alert-light border small">Score status: <strong>{{ explanation.score_status|default:"Needs recalculation" }}</strong> · Data coverage: <strong>{{ explanation.data_coverage_percentage|default:0 }}%</strong>. Weighted contributions are normalized over observed domains only.</div>
+                        <table class="table table-sm align-middle mb-0">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Indicator Domain</th>
+                                    <th>Weight</th>
+                                    <th>Observed Sub-Score</th>
+                                    <th>Weighted Contribution</th>
+                                    <th>Status</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td class="fw-semibold">Academic CGPA & Backlogs</td>
+                                    <td>30%</td>
+                                    <td class="fw-bold">{% if explanation.sub_scores.academic_score != None %}{{ explanation.sub_scores.academic_score|floatformat:1 }} / 100{% else %}<span class="text-muted">N/A — no data</span>{% endif %}</td>
+                                    <td class="fw-semibold">{% if explanation.sub_scores.academic_score != None %}{{ explanation.score_contributions.academic|floatformat:2 }}{% else %}N/A{% endif %}</td>
+                                    <td>{% if explanation.sub_scores.academic_score != None %}<span class="badge bg-success-subtle text-success">Observed</span>{% else %}<span class="badge bg-secondary">Missing</span>{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Attendance Compliance</td>
+                                    <td>25%</td>
+                                    <td class="fw-bold">{% if explanation.sub_scores.attendance_score != None %}{{ explanation.sub_scores.attendance_score|floatformat:1 }} / 100{% else %}<span class="text-muted">N/A — no data</span>{% endif %}</td>
+                                    <td class="fw-semibold">{% if explanation.sub_scores.attendance_score != None %}{{ explanation.score_contributions.attendance|floatformat:2 }}{% else %}N/A{% endif %}</td>
+                                    <td>{% if explanation.sub_scores.attendance_score != None %}<span class="badge bg-success-subtle text-success">Observed</span>{% else %}<span class="badge bg-secondary">Missing</span>{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">LMS Engagement & Timeliness</td>
+                                    <td>15%</td>
+                                    <td class="fw-bold">{% if explanation.sub_scores.lms_score != None %}{{ explanation.sub_scores.lms_score|floatformat:1 }} / 100{% else %}<span class="text-muted">N/A — no data</span>{% endif %}</td>
+                                    <td class="fw-semibold">{% if explanation.sub_scores.lms_score != None %}{{ explanation.score_contributions.lms|floatformat:2 }}{% else %}N/A{% endif %}</td>
+                                    <td>{% if explanation.sub_scores.lms_score != None %}<span class="badge bg-success-subtle text-success">Observed</span>{% else %}<span class="badge bg-secondary">Missing</span>{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Placement Readiness Assessments</td>
+                                    <td>15%</td>
+                                    <td class="fw-bold">{% if explanation.sub_scores.placement_score != None %}{{ explanation.sub_scores.placement_score|floatformat:1 }} / 100{% else %}<span class="text-muted">N/A — no data</span>{% endif %}</td>
+                                    <td class="fw-semibold">{% if explanation.sub_scores.placement_score != None %}{{ explanation.score_contributions.placement|floatformat:2 }}{% else %}N/A{% endif %}</td>
+                                    <td>{% if explanation.sub_scores.placement_score != None %}<span class="badge bg-success-subtle text-success">Observed</span>{% else %}<span class="badge bg-secondary">Missing</span>{% endif %}</td>
+                                </tr>
+                                <tr>
+                                    <td class="fw-semibold">Skills, Engagement & Feedback</td>
+                                    <td>15%</td>
+                                    <td class="fw-bold">{% if explanation.sub_scores.skills_engagement_score != None %}{{ explanation.sub_scores.skills_engagement_score|floatformat:1 }} / 100{% else %}<span class="text-muted">N/A — no data</span>{% endif %}</td>
+                                    <td class="fw-semibold">{% if explanation.sub_scores.skills_engagement_score != None %}{{ explanation.campus_domain_contribution|floatformat:2 }}{% else %}N/A{% endif %}</td>
+                                    <td>{% if explanation.sub_scores.skills_engagement_score != None %}<span class="badge bg-success-subtle text-success">Observed</span>{% else %}<span class="badge bg-secondary">Missing</span>{% endif %}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
+            <div class="col-md-5">
+                <div class="card card-stats p-4 mb-4">
+                    <h5 class="fw-bold text-success mb-3"><i class="bi bi-check-circle me-2"></i> Key Strengths</h5>
+                    {% if explanation.positive_factors %}
+                        <ul class="list-group list-group-flush">
+                            {% for factor in explanation.positive_factors %}
+                                <li class="list-group-item bg-transparent text-success small"><i class="bi bi-plus-circle me-2"></i> {{ factor }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-muted small mb-0">No distinct positive flags identified.</p>
+                    {% endif %}
+                </div>
+
+                <div class="card card-stats p-4">
+                    <h5 class="fw-bold text-danger mb-3"><i class="bi bi-exclamation-octagon me-2"></i> Risk Drivers & Flags</h5>
+                    {% if explanation.risk_flags %}
+                        <ul class="list-group list-group-flush">
+                            {% for flag in explanation.risk_flags %}
+                                <li class="list-group-item bg-transparent text-danger small"><i class="bi bi-x-circle me-2"></i> {{ flag }}</li>
+                            {% endfor %}
+                        </ul>
+                    {% else %}
+                        <p class="text-success small mb-0"><i class="bi bi-shield-check me-1"></i> No critical risk flags detected.</p>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 2. Academics Pane -->
+    <div class="tab-pane fade" id="academics-pane" role="tabpanel">
+        <div class="card card-stats p-4 mb-4">
+            <h5 class="fw-bold mb-3">Semester CGPA & SGPA History</h5>
+            <div class="table-responsive">
+                <table class="table table-bordered align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Semester</th>
+                            <th>SGPA</th>
+                            <th>CGPA</th>
+                            <th>Backlogs</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for res in sem_results %}
+                            <tr>
+                                <td>Semester {{ res.semester.number }}</td>
+                                <td class="fw-bold">{{ res.sgpa }}</td>
+                                <td class="fw-bold text-primary">{{ res.cgpa }}</td>
+                                <td>{{ res.backlog_count }}</td>
+                                <td>
+                                    {% if res.passed %}
+                                        <span class="badge bg-success">Passed</span>
+                                    {% else %}
+                                        <span class="badge bg-danger">Backlogs Active</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="5" class="text-center text-muted">No semester records logged.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 3. Attendance Pane -->
+    <div class="tab-pane fade" id="attendance-pane" role="tabpanel">
+        <div class="card card-stats p-4">
+            <h5 class="fw-bold mb-3">Attendance Logs & Compliance</h5>
+            {% if overall_att %}
+                <div class="mb-3">
+                    <label class="fw-semibold">Overall Attendance:</label>
+                    <span class="fw-bold fs-5 ms-2 text-primary">{{ overall_att.attendance_percentage }}%</span>
+                    <span class="text-muted">({{ overall_att.classes_attended }} / {{ overall_att.total_classes }} classes)</span>
+                </div>
+            {% endif %}
+
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Subject</th>
+                            <th>Classes Conducted</th>
+                            <th>Attended</th>
+                            <th>Percentage</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for att in attendance_recs %}
+                            <tr>
+                                <td>{{ att.subject.code|default:"Overall" }}</td>
+                                <td>{{ att.total_classes }}</td>
+                                <td>{{ att.classes_attended }}</td>
+                                <td class="fw-bold">{{ att.attendance_percentage }}%</td>
+                                <td>
+                                    {% if att.attendance_percentage < 75 %}
+                                        <span class="badge bg-danger">Below 75% Threshold</span>
+                                    {% else %}
+                                        <span class="badge bg-success">Compliant</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="5" class="text-center text-muted">No attendance logs available.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- 4. LMS & Skills Pane -->
+    <div class="tab-pane fade" id="lms-pane" role="tabpanel">
+        <div class="row g-4">
+            <div class="col-md-6">
+                <div class="card card-stats p-4">
+                    <h5 class="fw-bold mb-3">LMS Engagement Metrics</h5>
+                    {% if lms_summary %}
+                        <div class="mb-2">Assignment Completion: <strong>{{ lms_summary.assignment_completion_pct }}%</strong></div>
+                        <div class="mb-2">Submission Timeliness: <strong>{{ lms_summary.assignment_timeliness_pct }}%</strong></div>
+                        <div class="mb-2">Quiz Participation: <strong>{{ lms_summary.quiz_participation_pct }}%</strong></div>
+                        <div class="mb-2">Monthly Logins: <strong>{{ lms_summary.login_frequency }}</strong></div>
+                    {% else %}
+                        <p class="text-muted">No LMS data synced.</p>
+                    {% endif %}
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="card card-stats p-4">
+                    <h5 class="fw-bold mb-3">Technical & Soft Skill Assessments</h5>
+                    <ul class="list-group list-group-flush">
+                        {% for s in skills %}
+                            <li class="list-group-item bg-transparent d-flex justify-content-between align-items-center">
+                                <span>{{ s.skill.name }}</span>
+                                <span class="badge bg-primary rounded-pill">{{ s.proficiency_score }} / 100</span>
+                            </li>
+                        {% empty %}
+                            <li class="list-group-item bg-transparent text-muted">No skill ratings logged.</li>
+                        {% endfor %}
+                    </ul>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 5. Placement Readiness Pane -->
+    <div class="tab-pane fade" id="placement-pane" role="tabpanel">
+        <div class="card card-stats p-4">
+            <h5 class="fw-bold mb-3">Placement Assessment Scores</h5>
+            {% if placement %}
+                <div class="row g-3">
+                    <div class="col-md-2">
+                        <div class="p-3 bg-light rounded text-center">
+                            <div class="text-muted small">Aptitude</div>
+                            <div class="fw-bold text-primary">{{ placement.aptitude_score }}%</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="p-3 bg-light rounded text-center">
+                            <div class="text-muted small">Coding</div>
+                            <div class="fw-bold text-success">{{ placement.coding_score }}%</div>
+                        </div>
+                    </div>
+                    <div class="col-md-2">
+                        <div class="p-3 bg-light rounded text-center">
+                            <div class="text-muted small">Mock Interview</div>
+                            <div class="fw-bold text-info">{{ placement.mock_interview_score }}%</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 bg-light rounded text-center">
+                            <div class="text-muted small">Resume Readiness</div>
+                            <div class="fw-bold text-dark">{{ placement.resume_readiness_score }}%</div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="p-3 bg-light rounded text-center">
+                            <div class="text-muted small">Communication</div>
+                            <div class="fw-bold text-purple">{{ placement.communication_score }}%</div>
+                        </div>
+                    </div>
+                </div>
+            {% else %}
+                <p class="text-muted">No placement assessment records available for this student.</p>
+            {% endif %}
+        </div>
+    </div>
+
+    <!-- 6. Interventions Pane -->
+    <div class="tab-pane fade" id="interventions-pane" role="tabpanel">
+        <div class="card card-stats p-4">
+            <h5 class="fw-bold mb-3">Closed-Loop Intervention Records</h5>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Type</th>
+                            <th>Reason</th>
+                            <th>Assigned Officer</th>
+                            <th>Status</th>
+                            <th>Follow-up Date</th>
+                            <th>Outcome Notes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for interv in interventions %}
+                            <tr>
+                                <td class="fw-bold">{{ interv.get_intervention_type_display }}</td>
+                                <td class="small">{{ interv.reason }}</td>
+                                <td>{{ interv.assigned_by.username|default:"System" }}</td>
+                                <td><span class="badge bg-info">{{ interv.get_status_display }}</span></td>
+                                <td>{{ interv.follow_up_date|default:"N/A" }}</td>
+                                <td class="small text-muted">{{ interv.outcome_notes|default:"Pending action" }}</td>
+                            </tr>
+                        {% empty %}
+                            <tr><td colspan="6" class="text-center text-muted">No interventions logged.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Log New Intervention -->
+{% if not user.is_student_user %}
+<div class="modal fade" id="newInterventionModal" tabindex="-1">
+    <div class="modal-dialog">
+        <div class="modal-content">
+            <form method="post" action="{% url 'analytics:intervention_action' %}">
+                {% csrf_token %}
+                <input type="hidden" name="student_id" value="{{ student.student_id }}">
+                <div class="modal-header">
+                    <h5 class="modal-header-title fw-bold">Log Student Intervention</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body">
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Intervention Type</label>
+                        <select name="intervention_type" class="form-select" required>
+                            <option value="ACADEMIC_TUTORING">Academic Tutoring & Remedial Classes</option>
+                            <option value="ATTENDANCE_COUNSELING">Attendance Counseling</option>
+                            <option value="PLACEMENT_PREP">Placement & Career Mentorship</option>
+                            <option value="MENTAL_HEALTH">Wellness & Personal Counseling</option>
+                            <option value="SKILL_BOOTCAMP">Technical Skill Development</option>
+                        </select>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label fw-semibold">Justification / Reason</label>
+                        <textarea name="reason" class="form-control" rows="3" placeholder="Enter justification or risk factors..." required></textarea>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                    <button type="submit" class="btn btn-primary">Save Intervention</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+{% endblock %}

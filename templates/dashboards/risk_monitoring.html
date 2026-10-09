@@ -1,0 +1,100 @@
+{% extends 'base.html' %}
+
+{% block title %}At-Risk Student Workspace - Smart Campus Analytics{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="fw-bold mb-1 text-danger"><i class="bi bi-exclamation-triangle-fill me-2"></i> At-Risk Student Workspace</h2>
+        <p class="text-muted mb-0">Prioritized risk monitoring for students flagged by academic indicators or independent placement readiness.</p>
+    </div>
+</div>
+
+<!-- Risk Summary Cards -->
+<div class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card card-stats p-3 border-start border-4 border-dark">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="text-muted small">Critical Risk Students</div>
+                    <h3 class="fw-bold text-dark mb-0">{{ critical_count }}</h3>
+                </div>
+                <div class="stat-icon bg-dark text-white">
+                    <i class="bi bi-shield-x"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="card card-stats p-3 border-start border-4 border-danger">
+            <div class="d-flex align-items-center justify-content-between">
+                <div>
+                    <div class="text-muted small">High Risk Students</div>
+                    <h3 class="fw-bold text-danger mb-0">{{ high_count }}</h3>
+                </div>
+                <div class="stat-icon bg-danger bg-opacity-10 text-danger">
+                    <i class="bi bi-exclamation-octagon"></i>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- At-Risk Table -->
+<div class="card card-stats p-4">
+    <div class="table-responsive">
+        <table class="table table-hover align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th>Student</th>
+                    <th>Department</th>
+                    <th>Risk Category</th>
+                    <th>Overall Score</th>
+                    <th>Triggering Risk Factors</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for snapshot in snapshots %}
+                    <tr>
+                        <td>
+                            <div class="fw-bold">{{ snapshot.student.full_name }}</div>
+                            <span class="small text-muted font-monospace">{{ snapshot.student.student_id }}</span>
+                        </td>
+                        <td><span class="badge bg-light text-dark border">{{ snapshot.student.department.code }}</span></td>
+                        <td>
+                            {% if snapshot.academic_risk_level == 'CRITICAL' or snapshot.placement_risk_level == 'CRITICAL' %}
+                                <span class="badge bg-dark">Critical · {% if snapshot.placement_risk_level == 'CRITICAL' %}Placement{% else %}Academic{% endif %}</span>
+                            {% elif snapshot.placement_risk_level == 'HIGH' and snapshot.academic_risk_level != 'HIGH' %}
+                                <span class="badge bg-warning text-dark">High Placement Risk</span>
+                            {% else %}
+                                <span class="badge bg-danger">High Academic Risk</span>
+                            {% endif %}
+                        </td>
+                        <td class="fw-bold text-danger">{% if snapshot.overall_success_score != None %}{{ snapshot.overall_success_score|floatformat:1 }} / 100{% else %}N/A{% endif %}</td>
+                        <td class="small">
+                            {% for flag in snapshot.explanation_json.risk_flags %}
+                                <div class="text-danger"><i class="bi bi-x-circle me-1"></i> {{ flag }}</div>
+                            {% empty %}
+                                <div class="text-muted">Low composite score.</div>
+                            {% endfor %}
+                        </td>
+                        <td>
+                            <a href="{% url 'analytics:student_detail' student_id=snapshot.student.student_id %}" class="btn btn-sm btn-outline-danger rounded-pill">
+                                Review Evidence & Log Action
+                            </a>
+                        </td>
+                    </tr>
+                {% empty %}
+                    <tr>
+                        <td colspan="6" class="text-center py-4 text-success">
+                            <i class="bi bi-check-circle fs-3 d-block mb-2"></i>
+                            No high or critical risk students detected.
+                        </td>
+                    </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
