@@ -18,7 +18,7 @@ services:
           name: smart-campus-analytics-db
           property: connectionString
       - key: ALLOW_PUBLIC_STUDENT_REGISTRATION
-        value: "False"
+        value: "True"
       - key: TIME_ZONE
         value: Asia/Kolkata
       - key: SECURE_SSL_REDIRECT
